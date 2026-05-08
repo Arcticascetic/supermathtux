@@ -28,6 +28,7 @@
 #include "object/camera.hpp"
 #include "object/coin.hpp"
 #include "object/player.hpp"
+#include "object/powerup.hpp"
 #include "object/portable.hpp"
 #include "object/sprite_particle.hpp"
 #include "object/water_drop.hpp"
@@ -39,6 +40,13 @@
 #include "supertux/tile.hpp"
 #include "util/reader_mapping.hpp"
 #include "util/writer.hpp"
+#include "gui/dialog.hpp"
+#include "gui/menu_manager.hpp"
+#include "supertux/screen_manager.hpp"
+#include <array>
+#include <string>
+#include <memory>
+#include <algorithm>
 
 static const float SQUISH_TIME = 2;
 static const float GEAR_TIME = 2;
@@ -602,6 +610,94 @@ BadGuy::collision(MovingObject& other, const CollisionHit& hit)
         kill_fall();
         return FORCE_MOVE;
       }
+
+      // With probability 1/3 ask a simple math question (multiple choice).
+      // If the player answers incorrectly the attack fails (we delegate
+      // to collision_player behaviour), otherwise proceed with squish.
+      if (gameRandom.rand(0, 3) == 0) {
+        int a = gameRandom.rand(0, 10); // 0..9
+        int b = gameRandom.rand(0, 10);
+        bool plus = (gameRandom.rand(0, 2) == 0);
+        if (!plus && a < b) std::swap(a, b); // avoid negative results for subtraction
+        int correct = plus ? (a + b) : (a - b);
+
+        int wrong1 = correct + gameRandom.rand(1, 4); // +1..+3
+        int wrong2 = correct - gameRandom.rand(1, 4); // -1..-3
+        if (wrong2 < 0) wrong2 = correct + gameRandom.rand(1, 4);
+
+        std::array<int, 3> opts = { correct, wrong1, wrong2 };
+        // simple shuffle
+        for (int i = 0; i < 3; ++i) {
+          int j = gameRandom.rand(i, 3); // random index in [i,3)
+          std::swap(opts[i], opts[j]);
+        }
+
+        std::string question = std::string("What is ") + std::to_string(a) + (plus ? " + " : " - ") + std::to_string(b) + "?";
+
+        auto dialog = std::make_unique<Dialog>(false);
+        dialog->set_text(question);
+        dialog->clear_buttons();
+
+        // copy hit and capture UIDs for the callbacks (safer than raw pointers)
+        CollisionHit hit_copy = hit;
+        UID badguy_uid = this->get_uid();
+        UID player_uid = player->get_uid();
+
+        // Pause the game world while the dialog is active.
+        float old_speed = ScreenManager::current()->get_speed();
+        ScreenManager::current()->set_speed(0.0f);
+        // Guard to ensure speed is restored when the dialog (and its
+        // callbacks) are destroyed by MenuManager, even if no button
+        // callback ran. The deleter will restore the old speed.
+        auto speed_guard = std::shared_ptr<void>(nullptr, [old_speed](void*) {
+          if (ScreenManager::current())
+            ScreenManager::current()->set_speed(old_speed);
+        });
+
+        for (int k = 0; k < 3; ++k) {
+          int val = opts[k];
+          bool is_correct = (val == correct);
+          dialog->add_button(std::to_string(val), [badguy_uid, player_uid, hit_copy, is_correct, old_speed, speed_guard]() {
+            // Look up objects at callback time to avoid dangling pointers
+            auto* badguy_ptr = Sector::get().get_object_by_uid<BadGuy>(badguy_uid);
+            auto* player_ptr = Sector::get().get_object_by_uid<Player>(player_uid);
+            if (is_correct) {
+              if (badguy_ptr && player_ptr) {
+                badguy_ptr->collision_squished(*player_ptr);
+                // 1/10 chance to spawn a powerup at the badguy's position
+                if (gameRandom.rand(0, 10) == 0) {
+                  // Spawn the powerup near the badguy's top/middle so it
+                  // appears where the squish happened.
+                  Vector spawn_pos(badguy_ptr->get_bbox().get_middle().x,
+                                    badguy_ptr->get_bbox().get_top() - 32.0f);
+                  int spawn_layer = std::max(0, badguy_ptr->get_layer() - 1);
+                  Sector::get().add<PowerUp>(spawn_pos, PowerUp::EGG, spawn_layer);
+                  SoundManager::current()->play("sounds/upgrade.wav", spawn_pos);
+                }
+              }
+            } else {
+              if (badguy_ptr && player_ptr)
+                badguy_ptr->collision_player(*player_ptr, hit_copy);
+            }
+            // Restore immediately; speed_guard will also restore if the
+            // dialog gets destroyed without running this callback.
+            if (ScreenManager::current()) ScreenManager::current()->set_speed(old_speed);
+          });
+        }
+
+        // Cancel counts as incorrect answer.
+        dialog->add_cancel_button(_("Cancel"), [badguy_uid, player_uid, hit_copy, old_speed, speed_guard]() {
+          auto* badguy_ptr = Sector::get().get_object_by_uid<BadGuy>(badguy_uid);
+          auto* player_ptr = Sector::get().get_object_by_uid<Player>(player_uid);
+          if (badguy_ptr && player_ptr)
+            badguy_ptr->collision_player(*player_ptr, hit_copy);
+          if (ScreenManager::current()) ScreenManager::current()->set_speed(old_speed);
+        });
+
+        MenuManager::instance().set_dialog(std::move(dialog));
+        return ABORT_MOVE; // defer collision resolution until player answers
+      }
+
       if (collision_squished(*player)) {
         return FORCE_MOVE;
       }
