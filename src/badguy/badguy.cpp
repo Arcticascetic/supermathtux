@@ -657,28 +657,28 @@ BadGuy::collision(MovingObject& other, const CollisionHit& hit)
         for (int k = 0; k < 3; ++k) {
           int val = opts[k];
           bool is_correct = (val == correct);
-          dialog->add_button(std::to_string(val), [badguy_uid, player_uid, hit_copy, is_correct, old_speed, speed_guard]() {
+          dialog->add_button(std::to_string(val), [player_uid, hit_copy, is_correct, old_speed, speed_guard]() {
             // Look up objects at callback time to avoid dangling pointers
-            auto* badguy_ptr = Sector::get().get_object_by_uid<BadGuy>(badguy_uid);
             auto* player_ptr = Sector::get().get_object_by_uid<Player>(player_uid);
             if (is_correct) {
-              if (badguy_ptr && player_ptr) {
-                badguy_ptr->collision_squished(*player_ptr);
-                // 1/10 chance to spawn a powerup at the badguy's position
-                if (gameRandom.rand(0, 10) == 0) {
+              if (player_ptr) {
+                // 1/3 chance to spawn a powerup at the player's position
+                if (gameRandom.rand(0, 3) == 0) {
                   // Spawn the powerup near the badguy's top/middle so it
                   // appears where the squish happened.
-                  Vector spawn_pos(badguy_ptr->get_bbox().get_middle().x,
-                                    badguy_ptr->get_bbox().get_top() - 32.0f);
-                  int spawn_layer = std::max(0, badguy_ptr->get_layer() - 1);
+                  Vector spawn_pos(player_ptr->get_bbox().get_middle().x,
+                                    player_ptr->get_bbox().get_top() - 32.0f);
+                  int spawn_layer = std::max(0, player_ptr->get_layer() - 1);
                   Sector::get().add<PowerUp>(spawn_pos, PowerUp::EGG, spawn_layer);
                   SoundManager::current()->play("sounds/upgrade.wav", spawn_pos);
                 }
               }
-            } else {
-              if (badguy_ptr && player_ptr)
-                badguy_ptr->collision_player(*player_ptr, hit_copy);
             }
+            else
+            {
+              if (player_ptr)
+                player_ptr->collision_solid(hit_copy);
+            } 
             // Restore immediately; speed_guard will also restore if the
             // dialog gets destroyed without running this callback.
             if (ScreenManager::current()) ScreenManager::current()->set_speed(old_speed);
@@ -686,11 +686,10 @@ BadGuy::collision(MovingObject& other, const CollisionHit& hit)
         }
 
         // Cancel counts as incorrect answer.
-        dialog->add_cancel_button(_("Cancel"), [badguy_uid, player_uid, hit_copy, old_speed, speed_guard]() {
-          auto* badguy_ptr = Sector::get().get_object_by_uid<BadGuy>(badguy_uid);
+        dialog->add_cancel_button(_("X"), [player_uid, hit_copy, old_speed, speed_guard]() {
           auto* player_ptr = Sector::get().get_object_by_uid<Player>(player_uid);
-          if (badguy_ptr && player_ptr)
-            badguy_ptr->collision_player(*player_ptr, hit_copy);
+          if (player_ptr)
+            player_ptr->collision_solid(hit_copy);
           if (ScreenManager::current()) ScreenManager::current()->set_speed(old_speed);
         });
 
