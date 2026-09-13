@@ -15,6 +15,16 @@ Run and jump through multiple worlds, fighting off enemies by jumping
 on them, bumping them from below or tossing objects at them, grabbing
 power-ups and other stuff on the way.
 
+In this edition (SuperMathTux), Tux must also solve math questions:
+jumping on enemies or hitting them with fire/ice projectiles pauses the
+game with a 1/3 probability and pops up a multiple-choice math question.
+Answer correctly to complete the attack and spawn a powerup from the
+defeated bad guy (an egg when small, otherwise fire/ice/star); a wrong
+answer makes the attack fail. The difficulty (grade level 1-6, from small
+addition/subtraction up to multiplication and division) can be set via
+**options > extras > Math Grade Level**. Grades 1-4 never use negative
+answers.
+
 ![Screenshot](https://www.supertux.org/images/0_7_0/github_preview.png)
 
 

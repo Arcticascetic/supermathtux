@@ -20,6 +20,16 @@
 #include <fmt/format.h>
 #include <stdexcept>
 
+#include "badguy/badguy.hpp"
+#include "math/random.hpp"
+#include "object/bullet.hpp"
+#include "object/player.hpp"
+#include "object/powerup.hpp"
+#include "supertux/gameconfig.hpp"
+#include "supertux/globals.hpp"
+#include "supertux/math_question.hpp"
+#include "supertux/menu/math_quiz_menu.hpp"
+
 #include "audio/sound_manager.hpp"
 #include "control/input_manager.hpp"
 #include "editor/editor.hpp"
@@ -127,6 +137,10 @@ GameSession::GameSession(std::istream& istream_, Savegame* savegame, Statistics*
 void
 GameSession::reset_level()
 {
+  // SuperMathTux: dropping any pending quiz on full reset.
+  m_math_quiz_active = false;
+  m_quiz_enemy = nullptr;
+  m_quiz_player = nullptr;
   for (const auto& p : m_currentsector->get_players())
   {
     try
@@ -200,6 +214,12 @@ GameSession::on_player_removed(int id)
 void
 GameSession::restart_level(bool after_death, bool preserve_music)
 {
+  // SuperMathTux: death restarts from the previous checkpoint via the
+  // spawnpoint stack (see below); drop any pending quiz state here since
+  // the sector/objects are re-parsed.
+  m_math_quiz_active = false;
+  m_quiz_enemy = nullptr;
+  m_quiz_player = nullptr;
   if (m_savegame)
   {
     const PlayerStatus& currentStatus = m_savegame->get_player_status();
@@ -1032,6 +1052,125 @@ GameSession::set_target_timer_paused(bool paused)
       lt.stop();
     else
       lt.start();
+  }
+}
+
+bool
+GameSession::try_trigger_math_quiz(BadGuy* enemy, Player* player, MathQuizAttack attack)
+{
+  if (!enemy || !player)
+    return false;
+  if (m_math_quiz_active)
+    return true; // Suppress stacked quizzes while one is open.
+  if (!m_currentsector || m_game_pause)
+    return false;
+  if (MenuManager::instance().is_active() || MenuManager::instance().has_dialog())
+    return false;
+  if (!enemy->is_valid() || !enemy->is_active())
+    return false;
+  if (player->is_dead() || player->is_dying())
+    return false;
+  if (Editor::current() && Editor::current()->is_active())
+    return false;
+
+  // 1/3 probability.
+  if (gameRandom.rand(3) != 0)
+    return false;
+
+  m_quiz_enemy = enemy;
+  m_quiz_player = player;
+  m_quiz_attack = attack;
+  m_math_quiz_active = true;
+
+  const int grade = g_config ? g_config->math_grade_level : 1;
+  MathQuestion question = MathQuestion::generate(grade);
+
+  // Pause the game (same pattern as toggle_pause, but with our own menu).
+  m_speed_before_pause = ScreenManager::current()->get_speed();
+  ScreenManager::current()->set_speed(0);
+  SoundManager::current()->pause_sounds();
+  m_currentsector->stop_looping_sounds();
+  SoundManager::current()->pause_music();
+  m_game_pause = true;
+  MouseCursor::current()->set_visible(true);
+
+  auto menu = std::make_unique<MathQuizMenu>(question, [this](bool correct) {
+    resolve_math_quiz(correct);
+  });
+  MenuManager::instance().set_menu(std::move(menu), true);
+  return true;
+}
+
+void
+GameSession::resolve_math_quiz(bool correct)
+{
+  BadGuy* enemy = m_quiz_enemy;
+  Player* player = m_quiz_player;
+  MathQuizAttack attack = m_quiz_attack;
+
+  m_quiz_enemy = nullptr;
+  m_quiz_player = nullptr;
+  m_math_quiz_active = false;
+  // Unpausing happens automatically in update() once the menu stack is empty.
+
+  if (!enemy || !player)
+    return;
+  if (!enemy->is_valid() || !player->is_valid())
+    return;
+  // Player may have died while the quiz was open (shouldn't happen while paused).
+  if (player->is_dead() || player->is_dying())
+    return;
+  if (!enemy->is_active())
+    return;
+
+  auto spawn_reward_powerup = [](BadGuy* badguy, Player* tux) {
+    if (!badguy || !tux || !badguy->is_valid())
+      return;
+    // Reward a correct answer with a powerup spawning from the bad guy.
+    // Small Tux gets an egg (grow up); otherwise a random fire/ice/star.
+    int type = PowerUp::EGG;
+    if (tux->get_bonus() != BONUS_NONE)
+    {
+      const int roll = gameRandom.rand(3);
+      type = (roll == 0) ? PowerUp::FIRE : ((roll == 1) ? PowerUp::ICE : PowerUp::STAR);
+    }
+    Sector::get().add<PowerUp>(badguy->get_pos(), type);
+    SoundManager::current()->play("sounds/upgrade.wav", badguy->get_pos());
+  };
+
+  if (attack == MathQuizAttack::STOMP)
+  {
+    if (correct)
+    {
+      // Attack succeeds: bounce Tux and kill the enemy. kill_fall() is
+      // public (kill_squished() is protected), so use it as the generic
+      // kill. This rewards a correct answer even for enemies that are
+      // normally not squishable.
+      player->bounce(*enemy);
+      enemy->kill_fall();
+      spawn_reward_powerup(enemy, player);
+    }
+    else
+    {
+      // Attack fails: enemy survives; bounce Tux away safely so the
+      // overlapping collision doesn't instantly kill him.
+      player->bounce(*enemy);
+      player->make_temporarily_safe(1.0f);
+    }
+  }
+  else // BULLET
+  {
+    if (correct)
+    {
+      enemy->kill_fall();
+      spawn_reward_powerup(enemy, player);
+    }
+    else
+    {
+      // Attack fails: enemy survives (bullet already consumed at trigger).
+      // Give Tux brief safety to keep the game fair for kids.
+      player->make_temporarily_safe(0.5f);
+    }
   }
 }
 

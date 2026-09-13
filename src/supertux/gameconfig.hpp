@@ -190,5 +190,8 @@ public:
 
   std::string repository_url;
 
+  /** SuperMathTux: grade level for math quiz questions (1-6). */
+  int math_grade_level;
+
   bool is_christmas() const;
 };

@@ -56,6 +56,7 @@ private:
   void add_music_volume();
   void add_flash_intensity();
   void add_mobile_control_scales();
+  void add_math_grade();
 
 private:
   enum MenuIDs {
@@ -93,6 +94,7 @@ private:
     MNID_PRECISE_SCROLLING,
     MNID_INVERT_WHEEL_X,
     MNID_INVERT_WHEEL_Y,
+    MNID_MATH_GRADE,
   };
 
 private:
@@ -115,6 +117,7 @@ private:
   StringOption m_music_volumes;
   StringOption m_flash_intensity_values;
   StringOption m_mobile_control_scales;
+  StringOption m_math_grades;
 
 private:
   OptionsMenu(const OptionsMenu&) = delete;

@@ -149,7 +149,8 @@ Config::Config() :
   multiplayer_no_limit(false),
   touch_haptic_feedback(true),
   touch_just_directional(true),
-  repository_url()
+  repository_url(),
+  math_grade_level(1)
 {
 }
 
@@ -302,6 +303,7 @@ Config::load()
   config_mapping.get("multiplayer_buzz_controllers", multiplayer_buzz_controllers);
   config_mapping.get("multiplayer_no_limit", multiplayer_no_limit);
   config_mapping.get("preferred_text_editor", preferred_text_editor);
+  config_mapping.get("math_grade_level", math_grade_level);
 
   std::optional<ReaderMapping> config_video_mapping;
   if (config_mapping.get("video", config_video_mapping))
@@ -481,6 +483,7 @@ Config::save()
   writer.write("multiplayer_buzz_controllers", multiplayer_buzz_controllers);
   writer.write("multiplayer_no_limit", multiplayer_no_limit);
   writer.write("preferred_text_editor", preferred_text_editor);
+  writer.write("math_grade_level", math_grade_level);
 
   writer.start_list("interface_colors");
   writer.write("menubackcolor", menubackcolor.toVector());
@@ -618,6 +621,7 @@ void
 Config::check_values()
 {
   camera_peek_multiplier = math::clamp(camera_peek_multiplier, 0.f, 1.f);
+  math_grade_level = math::clamp(math_grade_level, 1, 6);
 }
 
 bool

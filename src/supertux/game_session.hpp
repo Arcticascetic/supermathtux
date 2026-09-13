@@ -39,6 +39,7 @@
 #include "supertux/level.hpp"
 #include "video/surface_ptr.hpp"
 
+class BadGuy;
 class CodeController;
 class DrawingContext;
 class EndSequence;
@@ -141,6 +142,16 @@ public:
   bool is_active() const;
   inline void skip_intro() { m_skip_intro = true; }
 
+  /** SuperMathTux: quiz attack types. */
+  enum class MathQuizAttack { STOMP, BULLET };
+  /** Try to start a math quiz for an attack (1/3 chance inside).
+      Returns true if a quiz was started and the caller must skip the
+      normal kill/hurt logic for this collision. */
+  bool try_trigger_math_quiz(BadGuy* enemy, Player* player, MathQuizAttack attack);
+  bool is_math_quiz_active() const { return m_math_quiz_active; }
+  /** Resolve the pending quiz: correct = attack succeeds, wrong = attack fails. */
+  void resolve_math_quiz(bool correct);
+
   // TODO: Use pointer instead of reference. m_savegame can be NULL when the
   //   editor is active; this results in many cases where people check
   //   Editor::is_active()
@@ -213,6 +224,12 @@ private:
   std::vector<BonusType> m_pockets_at_start; /** What is in the pockets of the players */
 
   bool m_active; /** Game active? **/
+
+  /** SuperMathTux pending math quiz state. */
+  bool m_math_quiz_active = false;
+  BadGuy* m_quiz_enemy = nullptr;
+  Player* m_quiz_player = nullptr;
+  MathQuizAttack m_quiz_attack = MathQuizAttack::STOMP;
 
   bool m_end_seq_started;
   bool m_pause_target_timer;

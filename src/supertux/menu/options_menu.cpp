@@ -69,7 +69,8 @@ OptionsMenu::OptionsMenu(Type type, bool complete) :
   m_sound_volumes(),
   m_music_volumes(),
   m_flash_intensity_values(),
-  m_mobile_control_scales()
+  m_mobile_control_scales(),
+  m_math_grades()
 {
   refresh();
 }
@@ -222,6 +223,8 @@ OptionsMenu::refresh()
 
       add_submenu(_("Integrations and presence"), MenuStorage::INTEGRATIONS_MENU)
       .set_help(_("Manage whether SuperTux should display the levels you play on your social media profiles (Discord)"));
+
+      add_math_grade();
 
       if (g_config->developer_mode)
         add_submenu(_("Menu Customization"), MenuStorage::CUSTOM_MENU_MENU)
@@ -645,6 +648,28 @@ OptionsMenu::add_mobile_control_scales()
 }
 
 void
+OptionsMenu::add_math_grade()
+{
+  m_math_grades.list = {
+    _("Grade 1 (+, - small)"),
+    _("Grade 2 (+, - big)"),
+    _("Grade 3 (+, -, x)"),
+    _("Grade 4 (+, -, x, /)"),
+    _("Grade 5 (hard)"),
+    _("Grade 6 (harder)")
+  };
+  int grade = g_config->math_grade_level;
+  if (grade < 1)
+    grade = 1;
+  if (grade > 6)
+    grade = 6;
+  m_math_grades.next = grade - 1;
+
+  add_string_select(MNID_MATH_GRADE, _("Math Grade Level"), &m_math_grades.next, m_math_grades.list)
+    .set_help(_("Difficulty of math questions asked when attacking enemies (SuperMathTux)"));
+}
+
+void
 OptionsMenu::on_window_resize()
 {
   set_center_pos(static_cast<float>(SCREEN_WIDTH) / 2.0f,
@@ -886,6 +911,11 @@ OptionsMenu::menu_action(MenuItem& item)
     case MNID_DISABLE_NETWORK:
       refresh();
       set_active_item(MNID_DISABLE_NETWORK);
+      break;
+
+    case MNID_MATH_GRADE:
+      g_config->math_grade_level = m_math_grades.next + 1;
+      g_config->save();
       break;
 
     default:

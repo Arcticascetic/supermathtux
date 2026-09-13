@@ -34,6 +34,7 @@
 #include "sprite/sprite.hpp"
 #include "sprite/sprite_manager.hpp"
 #include "supertux/constants.hpp"
+#include "supertux/game_session.hpp"
 #include "supertux/level.hpp"
 #include "supertux/sector.hpp"
 #include "supertux/tile.hpp"
@@ -602,6 +603,13 @@ BadGuy::collision(MovingObject& other, const CollisionHit& hit)
         kill_fall();
         return FORCE_MOVE;
       }
+      // SuperMathTux: with 1/3 probability, pause for a math question.
+      // Correct = attack succeeds, wrong = attack fails (handled on resolve).
+      if (GameSession::current() &&
+          GameSession::current()->try_trigger_math_quiz(this, player,
+            GameSession::MathQuizAttack::STOMP)) {
+        return FORCE_MOVE;
+      }
       if (collision_squished(*player)) {
         return FORCE_MOVE;
       }
@@ -733,6 +741,19 @@ BadGuy::collision_squished(MovingObject& object)
 HitResponse
 BadGuy::collision_bullet(Bullet& bullet, const CollisionHit& hit)
 {
+  // SuperMathTux: with 1/3 probability, pause for a math question when
+  // Tux attacks with a bullet. Consume the bullet now; the quiz outcome
+  // decides whether the attack succeeds (enemy dies) or fails (survives).
+  if (GameSession::current())
+  {
+    Player& shooter = bullet.get_player();
+    if (GameSession::current()->try_trigger_math_quiz(this, &shooter,
+          GameSession::MathQuizAttack::BULLET))
+    {
+      bullet.remove_me();
+      return ABORT_MOVE;
+    }
+  }
   if (is_frozen()) {
     if (bullet.get_type() == BONUS_FIRE) {
       // Fire bullet thaws frozen badguys.
