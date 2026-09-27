@@ -22,6 +22,7 @@
 
 #include "badguy/badguy.hpp"
 #include "badguy/flyingsnowball.hpp"
+#include "badguy/mrbomb.hpp"
 #include "math/random.hpp"
 #include "object/bullet.hpp"
 #include "object/player.hpp"
@@ -1149,13 +1150,37 @@ GameSession::resolve_math_quiz(bool correct)
   {
     if (correct)
     {
-      // Attack succeeds: bounce Tux and kill the enemy. kill_fall() is
-      // public (kill_squished() is protected), so use it as the generic
-      // kill. This rewards a correct answer even for enemies that are
-      // normally not squishable.
-      player->bounce(*enemy);
-      enemy->kill_fall();
-      spawn_reward_powerup(enemy, player);
+      // Bomb exception: don't destroy the bomb on a correct answer.
+      // Start the normal fuse process instead (same as stomping it
+      // without a quiz: MrBomb::collision_squished() -> trigger()).
+      // This covers MrBomb and its subclass GoldBomb.
+      if (auto* bomb = dynamic_cast<MrBomb*>(enemy))
+      {
+        if (!bomb->is_frozen() && !bomb->is_ticking())
+        {
+          bomb->trigger(player);
+        }
+        else if (bomb->is_ticking())
+        {
+          player->bounce(*enemy);
+        }
+        else
+        {
+          player->bounce(*enemy);
+          enemy->kill_fall();
+          spawn_reward_powerup(enemy, player);
+        }
+      }
+      else
+      {
+        // Attack succeeds: bounce Tux and kill the enemy. kill_fall() is
+        // public (kill_squished() is protected), so use it as the generic
+        // kill. This rewards a correct answer even for enemies that are
+        // normally not squishable.
+        player->bounce(*enemy);
+        enemy->kill_fall();
+        spawn_reward_powerup(enemy, player);
+      }
     }
     else
     {
@@ -1169,8 +1194,26 @@ GameSession::resolve_math_quiz(bool correct)
   {
     if (correct)
     {
-      enemy->kill_fall();
-      spawn_reward_powerup(enemy, player);
+      // Bomb exception: don't destroy the bomb on a correct answer.
+      // Start the normal fuse process instead of exploding immediately.
+      if (auto* bomb = dynamic_cast<MrBomb*>(enemy))
+      {
+        if (!bomb->is_frozen() && !bomb->is_ticking())
+        {
+          bomb->trigger(nullptr);
+        }
+        else if (bomb->is_frozen())
+        {
+          enemy->kill_fall();
+          spawn_reward_powerup(enemy, player);
+        }
+        // Already-ticking bomb: leave it ticking (bullet was consumed).
+      }
+      else
+      {
+        enemy->kill_fall();
+        spawn_reward_powerup(enemy, player);
+      }
     }
     else
     {
