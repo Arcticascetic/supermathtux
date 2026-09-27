@@ -21,6 +21,7 @@
 #include <stdexcept>
 
 #include "badguy/badguy.hpp"
+#include "badguy/flyingsnowball.hpp"
 #include "math/random.hpp"
 #include "object/bullet.hpp"
 #include "object/player.hpp"
@@ -1071,6 +1072,12 @@ GameSession::try_trigger_math_quiz(BadGuy* enemy, Player* player, MathQuizAttack
   if (player->is_dead() || player->is_dying())
     return false;
   if (Editor::current() && Editor::current()->is_active())
+    return false;
+
+  // Flying Snowballs hover in mid-air and are used as bounce platforms
+  // to jump farther across gaps. Interrupting that bounce with a quiz
+  // breaks the flow, so never quiz on a stomp.
+  if (attack == MathQuizAttack::STOMP && dynamic_cast<FlyingSnowBall*>(enemy))
     return false;
 
   // 1/3 probability.

@@ -16,6 +16,9 @@ struct MathQuestion
       Grade 1: addition/subtraction, small numbers (0-10)
       Grade 2: addition/subtraction, larger numbers (0-100)
       Grade 3: addition/subtraction/multiplication
-      Grade 4+: addition/subtraction/multiplication/division (harder ranges scale up) */
+      Grade 4+: addition/subtraction/multiplication/division (harder ranges scale up)
+      About half the questions are rendered as word problems reusing the
+      same grade-appropriate numbers (give-away / receive-gift / missing-give
+      for +/-; gifts-from-friends for x; share-equally for /). */
   static MathQuestion generate(int grade_level);
 };
