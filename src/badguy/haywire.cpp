@@ -281,6 +281,25 @@ Haywire::freeze() {
 }
 
 void
+Haywire::trigger(Player* player)
+{
+  if (m_frozen || m_is_exploding)
+    return;
+
+  m_last_player_direction = m_dir;
+  start_exploding();
+  stomped_timer.start(STOMPED_TIME);
+
+  time_stunned = TIME_STUNNED;
+  is_stunned = true;
+  m_physic.set_velocity_x(0.f);
+  m_physic.set_acceleration_x(0.f);
+
+  if (player)
+    player->bounce(*this);
+}
+
+void
 Haywire::start_exploding()
 {
   set_walk_speed (EXPLODING_WALK_SPEED);

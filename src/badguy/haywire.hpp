@@ -30,6 +30,11 @@ public:
   virtual void kill_fall() override;
   virtual void ignite() override;
 
+  /** Start the normal exploding sequence (same as stomping without a quiz).
+      Optional player bounce mirrors MrBomb::trigger(). Safe to call when
+      frozen or already exploding (no-op in those cases). */
+  void trigger(Player* player);
+
   virtual void active_update(float dt_sec) override;
   virtual void draw(DrawingContext& context) override;
 

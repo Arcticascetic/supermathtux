@@ -22,6 +22,7 @@
 
 #include "badguy/badguy.hpp"
 #include "badguy/flyingsnowball.hpp"
+#include "badguy/haywire.hpp"
 #include "badguy/mrbomb.hpp"
 #include "math/random.hpp"
 #include "object/bullet.hpp"
@@ -1171,6 +1172,28 @@ GameSession::resolve_math_quiz(bool correct)
           spawn_reward_powerup(enemy, player);
         }
       }
+      else if (auto* haywire = dynamic_cast<Haywire*>(enemy))
+      {
+        // Haywire exception: same as bombs — don't explode instantly on a
+        // correct answer. Start the normal fuse process instead (same as
+        // stomping it without a quiz: Haywire::collision_squished()).
+        // Haywire::kill_fall() explodes, so it must not be called here
+        // unless frozen (frozen kill_fall is safe, no explosion).
+        if (!haywire->is_frozen() && !haywire->is_exploding())
+        {
+          haywire->trigger(player);
+        }
+        else if (haywire->is_exploding())
+        {
+          player->bounce(*enemy);
+        }
+        else
+        {
+          player->bounce(*enemy);
+          enemy->kill_fall();
+          spawn_reward_powerup(enemy, player);
+        }
+      }
       else
       {
         // Attack succeeds: bounce Tux and kill the enemy. kill_fall() is
@@ -1208,6 +1231,21 @@ GameSession::resolve_math_quiz(bool correct)
           spawn_reward_powerup(enemy, player);
         }
         // Already-ticking bomb: leave it ticking (bullet was consumed).
+      }
+      else if (auto* haywire = dynamic_cast<Haywire*>(enemy))
+      {
+        // Haywire exception: don't explode instantly on a correct answer.
+        // Start the normal fuse process instead of exploding immediately.
+        if (!haywire->is_frozen() && !haywire->is_exploding())
+        {
+          haywire->trigger(nullptr);
+        }
+        else if (haywire->is_frozen())
+        {
+          enemy->kill_fall();
+          spawn_reward_powerup(enemy, player);
+        }
+        // Already-ticking haywire: leave it ticking (bullet was consumed).
       }
       else
       {
