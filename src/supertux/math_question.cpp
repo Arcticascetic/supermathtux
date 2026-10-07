@@ -246,6 +246,69 @@ static bool try_build_word_problem(char op, int a, int b, std::string& out)
   return false;
 }
 
+static MathQuestion build_choices(int result, const std::string& text, int grade_level)
+{
+  MathQuestion q;
+  q.question_text = text;
+  q.correct_value = result;
+
+  // Grades 1-4 must not show negative answers (correct results are already
+  // kept non-negative via operand swapping above).
+  const bool allow_negative = (grade_level > 4);
+  auto distract = make_distractors(result, (grade_level <= 1) ? 3 : 10, 3, allow_negative);
+  std::vector<int> all_values;
+  all_values.push_back(result);
+  all_values.insert(all_values.end(), distract.begin(), distract.end());
+  // Shuffle answer order.
+  for (size_t i = all_values.size(); i > 1; --i)
+  {
+    size_t j = static_cast<size_t>(gameRandom.rand(0, static_cast<int>(i)));
+    std::swap(all_values[i - 1], all_values[j]);
+  }
+  for (size_t i = 0; i < all_values.size(); ++i)
+  {
+    q.answers.push_back(std::to_string(all_values[i]));
+    if (all_values[i] == result)
+      q.correct_index = static_cast<int>(i);
+  }
+  return q;
+}
+
+// Same as build_choices(), but from an explicit pre-built value list (used
+// by bigger/smaller and even/odd puzzles where distractors must satisfy
+// constraints, e.g. all be on the wrong side of X).
+static MathQuestion build_choices_from_values(int result, const std::string& text,
+                                              const std::vector<int>& all_values)
+{
+  MathQuestion q;
+  q.question_text = text;
+  q.correct_value = result;
+  std::vector<int> shuffled = all_values;
+  for (size_t i = shuffled.size(); i > 1; --i)
+  {
+    size_t j = static_cast<size_t>(gameRandom.rand(0, static_cast<int>(i)));
+    std::swap(shuffled[i - 1], shuffled[j]);
+  }
+  for (size_t i = 0; i < shuffled.size(); ++i)
+  {
+    q.answers.push_back(std::to_string(shuffled[i]));
+    if (shuffled[i] == result)
+      q.correct_index = static_cast<int>(i);
+  }
+  return q;
+}
+
+static int grade_max_number(int grade_level)
+{
+  if (grade_level <= 1)
+    return 10;
+  if (grade_level == 2)
+    return 50;
+  if (grade_level == 3)
+    return 100;
+  return 200;
+}
+
 MathQuestion
 MathQuestion::generate(int grade_level)
 {
@@ -253,6 +316,165 @@ MathQuestion::generate(int grade_level)
     grade_level = 1;
   if (grade_level > 6)
     grade_level = 6;
+
+  // Puzzle type roll: 0-4 standard arithmetic (50%, half of those as
+  // word problems), 5-6 missing-number (20%), 7 sequence (10%),
+  // 8 bigger/smaller (10%), 9 even/odd (10%).
+  const int puzzle = pick_int(0, 9);
+
+  if (puzzle == 7)
+  {
+    // --- Number sequence: "2, 4, 6, ?" ------------------------------
+    // Steps scale with grade; descending sequences (grades 2+) stay
+    // non-negative by construction.
+    int step = 1;
+    int start = 0;
+    bool descending = false;
+    if (grade_level <= 1)
+    {
+      step = pick_int(1, 2);
+      start = pick_int(0, 10);
+    }
+    else if (grade_level == 2)
+    {
+      const int steps[] = {2, 3, 5};
+      step = steps[pick_int(0, 2)];
+      descending = (pick_int(0, 3) == 0);
+      start = descending ? pick_int(3 * step, 3 * step + 20) : pick_int(0, 20);
+    }
+    else if (grade_level == 3)
+    {
+      const int steps[] = {2, 3, 4, 5, 10};
+      step = steps[pick_int(0, 4)];
+      descending = (pick_int(0, 3) == 0);
+      start = descending ? pick_int(3 * step, 3 * step + 30) : pick_int(0, 30);
+    }
+    else
+    {
+      const int steps[] = {2, 3, 4, 5, 10, 25};
+      step = steps[pick_int(0, 5)];
+      descending = (pick_int(0, 3) == 0);
+      const int hi = (grade_level == 4) ? 60 : 150;
+      start = descending ? pick_int(3 * step, 3 * step + hi) : pick_int(0, hi);
+    }
+    const int dir = descending ? -1 : 1;
+    const int n1 = start;
+    const int n2 = start + dir * step;
+    const int n3 = start + dir * 2 * step;
+    const int answer = start + dir * 3 * step;
+    std::ostringstream qs;
+    qs << "What comes next? " << n1 << ", " << n2 << ", " << n3 << ", ?";
+    return build_choices(answer, qs.str(), grade_level);
+  }
+
+  if (puzzle == 8)
+  {
+    // --- Bigger / smaller than X ------------------------------------
+    const int top = grade_max_number(grade_level);
+    const bool bigger = (pick_int(0, 1) == 0);
+    // Keep X away from the edges so both sides can be filled.
+    const int lo = (top <= 10) ? 2 : 5;
+    const int x = pick_int(lo, top - 2 > lo ? top - 2 : lo);
+    const int spread = (grade_level <= 1) ? 3 : 10;
+    std::ostringstream qs;
+    int answer = x;
+    std::vector<int> values;
+    if (bigger)
+    {
+      qs << "Which number is bigger than " << x << " ?";
+      answer = x + pick_int(1, spread);
+      values.push_back(answer);
+      for (int tries = 0; tries < 200 && (int)values.size() < 4; ++tries)
+      {
+        const int cand = x - pick_int(0, spread);
+        if (cand < 0 && grade_level <= 4)
+          continue;
+        if (cand > x)
+          continue;
+        if (std::find(values.begin(), values.end(), cand) != values.end())
+          continue;
+        values.push_back(cand);
+      }
+    }
+    else
+    {
+      qs << "Which number is smaller than " << x << " ?";
+      answer = x - pick_int(1, spread);
+      if (grade_level <= 4 && answer < 0)
+        answer = 0;
+      values.push_back(answer);
+      for (int tries = 0; tries < 200 && (int)values.size() < 4; ++tries)
+      {
+        const int cand = x + pick_int(0, spread);
+        if (cand < x)
+          continue;
+        if (cand == answer)
+          continue;
+        if (std::find(values.begin(), values.end(), cand) != values.end())
+          continue;
+        values.push_back(cand);
+      }
+    }
+    // Fallback fill: scan the valid wrong side for unused values
+    // (should rarely trigger; X >= 2 guarantees room).
+    if (bigger)
+    {
+      for (int cand = x; cand >= 0 && (int)values.size() < 4; --cand)
+      {
+        if (std::find(values.begin(), values.end(), cand) == values.end())
+          values.push_back(cand);
+      }
+    }
+    else
+    {
+      for (int cand = x; cand <= top + spread && (int)values.size() < 4; ++cand)
+      {
+        if (cand == answer)
+          continue;
+        if (std::find(values.begin(), values.end(), cand) == values.end())
+          values.push_back(cand);
+      }
+    }
+    return build_choices_from_values(answer, qs.str(), values);
+  }
+
+  if (puzzle == 9)
+  {
+    // --- Even / odd choice ------------------------------------------
+    const int top = grade_max_number(grade_level);
+    const bool want_even = (pick_int(0, 1) == 0);
+    std::ostringstream qs;
+    qs << (want_even ? "Which number is even?" : "Which number is odd?");
+    // Correct answer with the wanted parity.
+    int answer = pick_int(0, top);
+    if (want_even && (answer % 2 != 0))
+      answer = (answer + 1 <= top) ? answer + 1 : answer - 1;
+    if (!want_even && (answer % 2 == 0))
+      answer = (answer + 1 <= top) ? answer + 1 : answer - 1;
+    std::vector<int> values;
+    values.push_back(answer);
+    for (int tries = 0; tries < 200 && (int)values.size() < 4; ++tries)
+    {
+      int cand = pick_int(0, top);
+      const bool cand_even = (cand % 2 == 0);
+      if (cand_even != !want_even)
+        continue; // distractors must have the opposite parity
+      if (std::find(values.begin(), values.end(), cand) != values.end())
+        continue;
+      values.push_back(cand);
+    }
+    // Fallback fill with the right parity (should rarely trigger).
+    for (int cand = 0; cand <= top && (int)values.size() < 4; ++cand)
+    {
+      const bool cand_even = (cand % 2 == 0);
+      if (cand_even != !want_even)
+        continue;
+      if (std::find(values.begin(), values.end(), cand) != values.end())
+        continue;
+      values.push_back(cand);
+    }
+    return build_choices_from_values(answer, qs.str(), values);
+  }
 
   int a = 0, b = 0, result = 0;
   char op = '+';
@@ -345,6 +567,69 @@ MathQuestion::generate(int grade_level)
     }
   }
 
+  if (puzzle == 5 || puzzle == 6)
+  {
+    // --- Missing-number: "? + b = c" / "a - ? = c" / ... -------------
+    // Reuses the grade-appropriate (a, b, result) picked above, so the
+    // difficulty matches the standard questions.
+    std::ostringstream qs;
+    int answer = result;
+    if (op == '+')
+    {
+      if (pick_int(0, 1) == 0)
+      {
+        qs << "What is ? + " << b << " = " << result << " ?";
+        answer = a;
+      }
+      else
+      {
+        qs << "What is " << a << " + ? = " << result << " ?";
+        answer = b;
+      }
+    }
+    else if (op == '-')
+    {
+      if (pick_int(0, 1) == 0)
+      {
+        qs << "What is " << a << " - ? = " << result << " ?";
+        answer = b;
+      }
+      else
+      {
+        // ? - b = result  <=>  ? = result + b (= a).
+        qs << "What is ? - " << b << " = " << result << " ?";
+        answer = a;
+      }
+    }
+    else if (op == 'x')
+    {
+      if (pick_int(0, 1) == 0)
+      {
+        qs << "What is ? x " << b << " = " << result << " ?";
+        answer = a;
+      }
+      else
+      {
+        qs << "What is " << a << " x ? = " << result << " ?";
+        answer = b;
+      }
+    }
+    else // '/': a / b = result with a = b * result.
+    {
+      if (pick_int(0, 1) == 0)
+      {
+        qs << "What is " << a << " / ? = " << result << " ?";
+        answer = b;
+      }
+      else
+      {
+        qs << "What is ? / " << b << " = " << result << " ?";
+        answer = a;
+      }
+    }
+    return build_choices(answer, qs.str(), grade_level);
+  }
+
   std::ostringstream qs;
   std::string word_text;
   // ~50% word problems when the numbers make a sensible story; the numeric
@@ -355,28 +640,5 @@ MathQuestion::generate(int grade_level)
     qs << word_text;
   else
     qs << "What is " << a << " " << op << " " << b << " ?";
-  MathQuestion q;
-  q.question_text = qs.str();
-  q.correct_value = result;
-
-  // Grades 1-4 must not show negative answers (correct results are already
-  // kept non-negative via operand swapping above).
-  const bool allow_negative = (grade_level > 4);
-  auto distract = make_distractors(result, (grade_level <= 1) ? 3 : 10, 3, allow_negative);
-  std::vector<int> all_values;
-  all_values.push_back(result);
-  all_values.insert(all_values.end(), distract.begin(), distract.end());
-  // Shuffle answer order.
-  for (size_t i = all_values.size(); i > 1; --i)
-  {
-    size_t j = static_cast<size_t>(gameRandom.rand(0, static_cast<int>(i)));
-    std::swap(all_values[i - 1], all_values[j]);
-  }
-  for (size_t i = 0; i < all_values.size(); ++i)
-  {
-    q.answers.push_back(std::to_string(all_values[i]));
-    if (all_values[i] == result)
-      q.correct_index = static_cast<int>(i);
-  }
-  return q;
+  return build_choices(result, qs.str(), grade_level);
 }
