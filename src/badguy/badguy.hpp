@@ -163,6 +163,11 @@ public:
 
   bool is_frozen() const;
 
+  /** SuperMathTux: true once a math quiz has been triggered for this badguy.
+      Ensures an enemy that can be attacked multiple times is only quizzed once. */
+  bool has_math_quiz_triggered() const { return m_math_quiz_triggered; }
+  void set_math_quiz_triggered(bool triggered) { m_math_quiz_triggered = triggered; }
+
   bool is_in_water() const;
 
   /** Get melting particle sprite filename */
@@ -301,6 +306,8 @@ protected:
   Direction m_start_dir;
 
   bool m_frozen;
+  /** SuperMathTux: whether this badguy has already been quizzed. */
+  bool m_math_quiz_triggered;
   bool m_ignited; /**< true if this badguy is currently on fire */
   bool m_in_water; /** < true if the badguy is currently in water */
   bool m_on_ice; /**< true if the badguy is currently on ice */

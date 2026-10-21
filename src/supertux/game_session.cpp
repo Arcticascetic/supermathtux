@@ -1071,6 +1071,9 @@ GameSession::try_trigger_math_quiz(BadGuy* enemy, Player* player, MathQuizAttack
     return false;
   if (!enemy->is_valid() || !enemy->is_active())
     return false;
+  // An enemy that can be attacked multiple times should only be quizzed once.
+  if (enemy->has_math_quiz_triggered())
+    return false;
   if (player->is_dead() || player->is_dying())
     return false;
   if (Editor::current() && Editor::current()->is_active())
@@ -1085,6 +1088,9 @@ GameSession::try_trigger_math_quiz(BadGuy* enemy, Player* player, MathQuizAttack
   // 1/3 probability.
   if (gameRandom.rand(3) != 0)
     return false;
+
+  // Remember that this enemy has been quizzed so later attacks skip the quiz.
+  enemy->set_math_quiz_triggered(true);
 
   m_quiz_enemy = enemy;
   m_quiz_player = player;
