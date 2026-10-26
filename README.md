@@ -1,4 +1,4 @@
-# SuperTux
+# SuperMathTux
 
 [![Windows](https://github.com/SuperTux/supertux/actions/workflows/windows.yml/badge.svg?branch=master)](https://github.com/SuperTux/supertux/actions/workflows/windows.yml?branch=master)
 [![MacOS](https://github.com/SuperTux/supertux/actions/workflows/macos.yml/badge.svg?branch=master)](https://github.com/SuperTux/supertux/actions/workflows/macos.yml?branch=master)
@@ -8,7 +8,7 @@
 [![WebAssembly](https://github.com/SuperTux/supertux/actions/workflows/wasm.yml/badge.svg?branch=master)](https://github.com/SuperTux/supertux/actions/workflows/wasm.yml?branch=master)
 [![Github All Releases](https://img.shields.io/github/downloads/supertux/supertux/total.svg?maxAge=2592000)](https://github.com/SuperTux/supertux)
 
-SuperTux is a jump'n'run game with strong inspiration from the
+SuperMathTux is a jump'n'run game based in SuperTux which itself takes strong inspiration from the
 Super Mario Bros. games for the various Nintendo platforms.
 
 Run and jump through multiple worlds, fighting off enemies by jumping
